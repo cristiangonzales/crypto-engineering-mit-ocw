@@ -22,9 +22,13 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 )
+
+// TODO
+//const NumOfBlocks = 256
 
 func main() {
 
@@ -211,6 +215,28 @@ func GetMessageFromString(s string) Message {
 }
 
 // --- Functions
+// GenerateBlockArray takes no arguments and returns a byte array of 32 length, giving
+// the type Block
+// TODO: May be refactored to use slices instead of blocks with the utility function
+// provided
+func GenerateBlockArray() ([256]Block, [256]Block) {
+  var blockArray [256]Block
+  var hashedBlockArray [256]Block
+
+  for i := 0; i < 256; i++ {
+    singleBlock := make([]byte, 32)
+    _, err := rand.Read(singleBlock)
+	  if err != nil {
+	  	panic(err)
+	  }
+    var _singleBlock [32]byte
+    copy(_singleBlock[:], singleBlock[:32])
+    blockArray[i] = _singleBlock
+    hashedBlockArray[i] = blockArray[i].Hash()
+  }
+  return blockArray, hashedBlockArray
+}
+
 
 // GenerateKey takes no arguments, and returns a keypair and potentially an
 // error.  It gets randomness from the OS via crypto/rand
@@ -220,32 +246,50 @@ func GenerateKey() (SecretKey, PublicKey, error) {
 	var sec SecretKey
 	var pub PublicKey
 
-	// Your code here
-	// ===
+  sec.ZeroPre, pub.ZeroHash = GenerateBlockArray()
+  sec.OnePre, pub.OneHash = GenerateBlockArray()
 
-	// ===
 	return sec, pub, nil
 }
 
 // Sign takes a message and secret key, and returns a signature.
 func Sign(msg Message, sec SecretKey) Signature {
 	var sig Signature
-
-	// Your code here
-	// ===
-
-	// ===
+  _msg := Block(msg).Hash()
+  for i, _byte := range _msg {
+    // Convert the single byte from the message to an int
+    _byteToInt := uint8(_byte)
+    for mask, j := uint8(0x80), 0; mask != 0 && j < 8;
+        mask, j = mask >> 1, j + 1 {
+      if mask & _byteToInt != 0 {
+        sig.Preimage[(i * 8) + j] = sec.OnePre[(i * 8) + j]
+      } else {
+        sig.Preimage[(i * 8) + j] = sec.ZeroPre[(i * 8) + j]
+      }
+    }
+  }
 	return sig
 }
 
 // Verify takes a message, public key and signature, and returns a boolean
 // describing the validity of the signature.
 func Verify(msg Message, pub PublicKey, sig Signature) bool {
-
-	// Your code here
-	// ===
-
-	// ===
-
+  _msg := Block(msg).Hash()
+  for i, _byte := range _msg {
+    // Convert the single byte from the message to an int
+    _byteToInt := uint8(_byte)
+    for mask, j := uint8(0x80), 0; mask != 0 && j < 8;
+        mask, j = mask >> 1, j + 1 {
+      if mask & _byteToInt != 0 {
+        if sig.Preimage[(i * 8) + j].Hash() != pub.OneHash[(i * 8) + j] {
+          return false
+        }
+      } else {
+        if sig.Preimage[(i * 8) + j].Hash() != pub.ZeroHash[(i * 8) + j] {
+          return false
+        }
+      }
+    }
+  }
 	return true
 }
